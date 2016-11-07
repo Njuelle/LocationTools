@@ -6,7 +6,6 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-
 public class MainActivity extends LocationActivity {
 
     @Override
@@ -24,8 +23,6 @@ public class MainActivity extends LocationActivity {
                 textView.setText("lat: " + loc.getLatitude() + " / lng: " + loc.getLongitude());
             }
         });
-
-
 
     }
 }

@@ -1,21 +1,27 @@
 package com.example.nico.locationtools;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
+import android.content.IntentSender;
 import android.content.pm.PackageManager;
 import android.location.Location;
-import android.location.LocationManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
-import android.util.Log;
-
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResult;
+import com.google.android.gms.location.LocationSettingsStates;
+import com.google.android.gms.location.LocationSettingsStatusCodes;
 
 /**
  * Created by Nico on 26/10/2016.
@@ -25,10 +31,15 @@ public class LocationTools implements GoogleApiClient.ConnectionCallbacks, Googl
 
     Context context;
     private GoogleApiClient googleApiClient;
-    private LocationRequest locationRequest;
+    private LocationRequest locationRequest = new LocationRequest();
     private Location currentLocation;
     private PermsManager permsManager;
     private String[] perms = {android.Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+    protected static final int REQUEST_CHECK_SETTINGS = 0x1;
+    private LocationRequest locationRequestHighAccuracy = new LocationRequest();;
+    private LocationRequest locationRequestBalancedPowerAccuracy = new LocationRequest();
+    private boolean isLocationEnabled = false;
+
 
     public LocationTools(Context context) {
         this.context = context;
@@ -42,20 +53,73 @@ public class LocationTools implements GoogleApiClient.ConnectionCallbacks, Googl
         googleApiClient.connect();
 
         createLocationRequest();
+        checkLocationEnabled();
 
+    }
+
+    public boolean isLocationEnabled() {
+        return isLocationEnabled;
     }
 
     /**
      * check if location services is enabled
      *
-     * @return boolean
+     * @return
      */
-    public boolean isLocationEnabled() {
-        LocationManager locationManager = (LocationManager) context.getSystemService(context.LOCATION_SERVICE);
-        if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            return true;
-        }
-        return false;
+    public void checkLocationEnabled() {
+        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
+                .addLocationRequest(locationRequestHighAccuracy)
+                .addLocationRequest(locationRequestBalancedPowerAccuracy);
+
+        PendingResult<LocationSettingsResult> result = LocationServices
+                .SettingsApi
+                .checkLocationSettings(googleApiClient, builder.build());
+
+        result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
+            @Override
+            public void onResult(LocationSettingsResult result) {
+                final Status status = result.getStatus();
+                if (status.getStatusCode() == LocationSettingsStatusCodes.SUCCESS) {
+                    isLocationEnabled = true;
+                } else {
+                    isLocationEnabled = false;
+                }
+            }
+        });
+    }
+
+
+    public void enableLocation() {
+        LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder()
+                .addLocationRequest(locationRequestHighAccuracy)
+                .addLocationRequest(locationRequestBalancedPowerAccuracy);
+
+        PendingResult<LocationSettingsResult> result = LocationServices
+                .SettingsApi
+                .checkLocationSettings(googleApiClient, builder.build());
+
+
+        result.setResultCallback(new ResultCallback<LocationSettingsResult>() {
+            @Override
+            public void onResult(LocationSettingsResult result) {
+                final Status status = result.getStatus();
+                final LocationSettingsStates locationSettingsStatusCodes = result.getLocationSettingsStates();
+                switch (status.getStatusCode()) {
+                    case LocationSettingsStatusCodes.SUCCESS:
+                        break;
+                    case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
+                        try {
+                            status.startResolutionForResult((Activity)context, REQUEST_CHECK_SETTINGS);
+                        } catch (IntentSender.SendIntentException e) {
+                            // Ignore the error.
+                        }
+                        break;
+                    case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
+                        break;
+                }
+            }
+        });
+
     }
 
     /**
@@ -99,15 +163,15 @@ public class LocationTools implements GoogleApiClient.ConnectionCallbacks, Googl
     }
 
     /**
-     * get last know location or current location or default location
+     * get current or last know or default location
      * @return Location
      */
     public Location getLocation() {
         if (isLocationEnabled()){
             if (currentLocation != null) {
-                Log.e("currentLocation", "omg");
                 return currentLocation;
             }
+            LocationServices.FusedLocationApi.requestLocationUpdates(googleApiClient,locationRequest, this);
             if (LocationServices.FusedLocationApi.getLastLocation(googleApiClient) != null) {
                 return LocationServices.FusedLocationApi.getLastLocation(googleApiClient);
             }
@@ -127,5 +191,7 @@ public class LocationTools implements GoogleApiClient.ConnectionCallbacks, Googl
         return false;
     }
 
-
+    public static int getRequestCheckSettings() {
+        return REQUEST_CHECK_SETTINGS;
+    }
 }
